@@ -18,15 +18,3 @@ players <-
   arrange(desc(value_over_replacement))
 
 write.csv(players, file="output/replacement_points_rank.csv")
-
-## ---
-
-download_or_cache_file <- function(slug, url) {
-  local_filename <- str_interp("data/cache/${slug}")
-
-  if (!file.exists(local_filename)) {
-    download.file(url, local_filename)
-  }
-  # TODO: Return file contents or filename
-}
-

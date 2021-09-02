@@ -11,6 +11,8 @@ library("RColorBrewer")
 # The number of teams in the fantasy league
 league_size = 12
 
+# Return the depth of the field based on the number of teams and
+# the number of rostered players at that position.
 position_counts <- function(pos) {
   r = case_when(
     pos == "QB" ~ 2 * league_size,
@@ -35,15 +37,41 @@ calculate_replacement_points <- function(points, size) {
     as.integer()
 }
 
+# Grab final season PPR points from 2020.
+load_and_parse_historical_data <- function() {
+  data = read.csv("data/fantasy.2020.csv") %>%
+    filter(X != "Rk") %>%
+    rename(
+      player_name = X.1,
+      team = X.2,
+      fantasy_position = X.3,
+      ppr_score = Fantasy.1
+    ) %>%
+    select(player_name, team, fantasy_position, ppr_score) %>%
+    mutate_at(vars(ppr_score), as.numeric) %>%
+    arrange(desc(ppr_score)) %>%
+    group_by(fantasy_position) %>%
+    mutate(position_index = row_number()) %>%
+    ungroup() %>%
+    filter(ppr_score > 100)
+
+  data
+}
+
 load_and_parse_data <- function() {
   html <- read_html("data/nfl-player-rankings.200.html")
   name <- html_elements(html, "li a.playerName") %>% html_text2()
   projected_points <-
     html_elements(html, "li span.projected") %>% html_text2() %>% readr::parse_double()
+  prev_season_total <-
+    html_elements(html, "li span.playerSeasonTotal") %>% html_text2() %>% readr::parse_double()
   position_and_team <-
     html_elements(html, "li a.playerName + em") %>% html_text2()
 
-  data.frame(name, projected_points, position_and_team)
+  data.frame(name,
+             prev_season_total,
+             projected_points,
+             position_and_team)
 }
 
 run_calculations <- function(data) {
@@ -53,6 +81,10 @@ run_calculations <- function(data) {
     separate(position_and_team, c("position", "team"), " - ") %>%
     # Group by position (QB, WR, RB, ...)
     group_by(position) %>%
+    # Previous season
+    arrange(desc(prev_season_total)) %>%
+    mutate(prev_season_index = row_number()) %>%
+    # Current season projection
     arrange(desc(projected_points)) %>%
     mutate(draft_size = position_counts(position)) %>%
     mutate(
@@ -68,7 +100,7 @@ run_calculations <- function(data) {
     ) %>%
     select(-next_player_available_points,-draft_size) %>%
     arrange(desc(value_over_replacement)) %>%
-
+    # Indicate simulated draft round
     mutate(draft_round = as.integer((row_number() - 1) / league_size) + 1)
 
   # Add index number to each row for reference
@@ -76,7 +108,7 @@ run_calculations <- function(data) {
   players
 }
 
-plot_players <- function(data) {
+plot_player_projection <- function(data) {
   plot <-
     ggplot(players,
            aes(x = position_index, y = projected_points, color = position)) +
@@ -89,14 +121,47 @@ plot_players <- function(data) {
     ) +
     scale_x_discrete(labels = NULL, breaks = NULL) +
     scale_colour_brewer(palette = "Set2") +
-    labs(title = "Projected Fantasy Points by Position (Full Season)",
-         subtitle = "QBs are mostly good; Only a few good TEs exist",
-         caption = "Data from https://fantasy.nfl.com",
-         x="",
-         y="Projected Points")
+    labs(
+      title = "Projected Fantasy Points by Position (Full Season)",
+      subtitle = "QBs are mostly good; Only a few good TEs exist",
+      caption = "Data from https://fantasy.nfl.com",
+      x = "",
+      y = "Projected Points"
+    )
 
   ggsave(
-    str_interp("output/players.png"),
+    str_interp("output/player_projection.png"),
+    plot = plot,
+    width = 6,
+    height = 4
+  )
+}
+
+
+plot_prev_season <- function(data) {
+  plot <-
+    ggplot(data,
+           aes(x = position_index, y = ppr_score, color = fantasy_position)) +
+    geom_line(aes(group = fantasy_position)) +
+    geom_point(aes(group = fantasy_position)) +
+    theme_high_contrast(
+      foreground_color = "white",
+      background_color = "black",
+      base_family = "InputMono"
+    ) +
+    scale_x_discrete(labels = NULL, breaks = NULL) +
+    scale_colour_brewer(palette = "Set2") +
+    labs(
+      title = "2020 Fantasy Points by Position (Full Season)",
+      subtitle = "Showing players with over 100 points",
+      caption = "Data from https://www.pro-football-reference.com",
+      x = "",
+      y = "Fantasy Points",
+      color = "pos"
+    )
+
+  ggsave(
+    str_interp("output/prev_season.png"),
     plot = plot,
     width = 6,
     height = 4
@@ -108,4 +173,5 @@ players <- load_and_parse_data() %>%
 
 write.csv(players, file = "output/replacement_points_rank.csv")
 
-plot_players(players)
+plot_player_projection(players)
+plot_prev_season(load_and_parse_historical_data())

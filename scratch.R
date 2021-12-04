@@ -8,6 +8,14 @@ library(gghighcontrast)
 # install.packages("RColorBrewer")                   # Install RColorBrewer package
 library("RColorBrewer")
 
+# Beach colors
+yellow      = "#fce073"
+turquoise   = "#6ce3d6"
+light_grey  = "#eeeeee"
+medium_grey = "#97999b"
+dark_grey   = "#727475"
+coral       = "#f68b6b"
+
 # The number of teams in the fantasy league
 league_size = 12
 
@@ -145,12 +153,13 @@ plot_prev_season <- function(data) {
     geom_line(aes(group = fantasy_position)) +
     geom_point(aes(group = fantasy_position)) +
     theme_high_contrast(
-      foreground_color = "white",
-      background_color = "black",
+      foreground_color = "#111111",
+      background_color = light_grey,
       base_family = "InputMono"
     ) +
     scale_x_discrete(labels = NULL, breaks = NULL) +
-    scale_colour_brewer(palette = "Set2") +
+    # scale_colour_brewer(palette = "Set2") +
+    scale_color_manual(values=c(coral, turquoise, medium_grey, yellow)) +
     labs(
       title = "2020 Fantasy Points by Position (Full Season)",
       subtitle = "Showing players with over 100 points",
